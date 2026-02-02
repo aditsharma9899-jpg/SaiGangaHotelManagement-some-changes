@@ -55,13 +55,18 @@ function computeAmounts(raw) {
 /* ------------------ GET ALL (optional but useful) ------------------ */
 router.get("/", async (req, res) => {
   try {
-    const docs = await Booking.find().sort({ createdAt: -1 });
-    res.json(docs.map(d => d.raw));
+    const docs = await Booking.find().sort({ createdAt: -1 }).lean();
+    res.json({
+      success: true,
+      items: docs,                  // ✅ new UI
+      rawItems: docs.map(d => d.raw) // ✅ old excel style if needed
+    });
   } catch (error) {
     console.error("❌ Error fetching bookings:", error);
     res.status(500).json({ success: false, error: "Failed to fetch bookings" });
   }
 });
+
 
 router.post("/:bookingId/add-food", async (req, res) => {
   try {
@@ -277,66 +282,102 @@ module.exports = router;
 /* ------------------ PUT UPDATE BOOKING ------------------ */
 // ✅ PUT /newapi/bookings/:id   (id = BK0001)
 router.put("/:id", async (req, res) => {
+  console.log('update data',req.body)
   try {
     const bookingId = req.params.id;
-    const updatedRaw = req.body || {};
+    const body = req.body || {};
 
-    // find existing booking
     const existing = await Booking.findOne({ bookingId });
     if (!existing) return res.status(404).json({ success: false, error: "Booking not found" });
 
-    // compute totals again
-    const computed = computeAmounts(updatedRaw);
+    // ✅ rooms: prefer normalized array coming from frontend
+    const newRooms = parseRoomNumbers(
+      body.roomNumbers ?? body["Room Number"] ?? existing.roomNumbers ?? (existing.raw?.["Room Number"] || "")
+    );
 
-    // rooms change handling
-    const oldRoomStr = existing.raw?.["Room Number"] || existing.raw?.roomNumber || "TBD";
-    const newRoomStr = updatedRaw["Room Number"] || updatedRaw.roomNumber || "TBD";
+    const oldRooms = parseRoomNumbers(existing.roomNumbers ?? existing.raw?.["Room Number"] ?? "");
 
-    const oldRooms = parseRoomNumbers(oldRoomStr);
-    const newRooms = parseRoomNumbers(newRoomStr);
+    const roomsChanged =
+      oldRooms.join(",") !== newRooms.join(",");
 
-    const roomChanged = oldRoomStr !== newRoomStr;
-
-    if (roomChanged) {
-      // free old rooms
-      if (oldRooms.length > 0) {
-        await Room.updateMany(
-          { roomNumber: { $in: oldRooms } },
-          { $set: { status: "available" } }
-        );
+    if (roomsChanged) {
+      // free old
+      if (oldRooms.length) {
+        await Room.updateMany({ roomNumber: { $in: oldRooms } }, { $set: { status: "available" } });
       }
-      // occupy new rooms
-      if (newRooms.length > 0) {
-        await Room.updateMany(
-          { roomNumber: { $in: newRooms } },
-          { $set: { status: "occupied" } }
-        );
+      // occupy new
+      if (newRooms.length) {
+        await Room.updateMany({ roomNumber: { $in: newRooms } }, { $set: { status: "occupied" } });
       }
     }
 
-    // update booking doc
+    // ✅ normalize editable fields (use body, fallback to existing)
+    const customerName = body.customerName ?? body["Customer Name"] ?? existing.customerName;
+    const mobile = body.mobile ?? body["Mobile"] ?? existing.mobile;
+
+    const checkInDate = body.checkInDate ?? body["Check In"] ?? existing.checkInDate;
+    const checkInTime = body.checkInTime ?? body["Check In Time"] ?? existing.checkInTime;
+    const checkOutDate = body.checkOutDate ?? body["Check Out"] ?? existing.checkOutDate;
+
+    const status = body.status ?? body["Status"] ?? existing.status;
+
+    const nights = Number(body.nights ?? body["Nights"] ?? existing.nights ?? 1) || 1;
+    const roomPricePerNight = Number(body.roomPricePerNight ?? body["Room Price Per Night"] ?? existing.roomPricePerNight ?? 0) || 0;
+    const additionalAmount = Number(body.additionalAmount ?? body["Additional Amount"] ?? existing.additionalAmount ?? 0) || 0;
+
+    const roomAmount = roomPricePerNight * nights;
+    const totalAmount = roomAmount + additionalAmount;
+
+    // ✅ paid from DB (single source of truth)
+    const payDocs = await Payment.find({ bookingId });
+    const totalPaid = payDocs.reduce((s, p) => s + Number(p.amount || 0), 0);
+
+    const advance = totalPaid;
+    const balance = totalAmount - totalPaid;
+
+    // ✅ raw (keep both excel + normalized keys)
+    const raw = { ...(existing.raw || {}), ...(body.raw || {}) };
+
+    raw["Booking ID"] = bookingId;
+    raw["Customer Name"] = customerName;
+    raw["Mobile"] = mobile;
+    raw["Room Number"] = newRooms.length ? newRooms.join(", ") : "TBD";
+    raw["Check In"] = checkInDate;
+    raw["Check In Time"] = checkInTime;
+    raw["Check Out"] = checkOutDate;
+    raw["Status"] = status;
+
+    raw["Nights"] = nights;
+    raw["Room Price Per Night"] = roomPricePerNight;
+    raw["Room Amount"] = roomAmount;
+    raw["Additional Amount"] = additionalAmount;
+    raw["Total Amount"] = totalAmount;
+    raw["Advance"] = advance;
+    raw["Balance"] = balance;
+
     const saved = await Booking.findOneAndUpdate(
       { bookingId },
       {
-        customerName: updatedRaw["Customer Name"] || updatedRaw.customerName || existing.customerName,
-        mobile: updatedRaw["Mobile"] || updatedRaw.mobile || existing.mobile,
+        customerName,
+        mobile,
         roomNumbers: newRooms,
-        status: updatedRaw.Status || updatedRaw.status || existing.status,
-        checkIn: updatedRaw["Check In"] || updatedRaw.checkIn || existing.checkIn,
-        checkOut: updatedRaw["Check Out"] || updatedRaw.checkOut || existing.checkOut,
-        nights: computed.nights,
-        roomPricePerNight: computed.roomPricePerNight,
-        additionalAmount: computed.additionalAmount,
-        roomAmount: computed.roomAmount,
-        totalAmount: computed.totalAmount,
-        advance: computed.advance,
-        balance: computed.balance,
-        raw: updatedRaw
+        status,
+        checkInDate,
+        checkInTime,
+        checkOutDate,
+        nights,
+        roomPricePerNight,
+        additionalAmount,
+        roomAmount,
+        totalAmount,
+        advance,
+        balance,
+        raw,
       },
       { new: true }
     );
 
-    res.json({ success: true, booking: saved.raw });
+    return res.json({ success: true, booking: saved });
   } catch (error) {
     console.error("❌ Error updating booking:", error);
     res.status(500).json({ success: false, error: "Failed to update booking" });

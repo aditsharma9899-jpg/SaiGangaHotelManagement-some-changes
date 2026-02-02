@@ -1408,6 +1408,82 @@ function updateAllTables() {
   }
 }
 
+async function handleEditBookingSubmit(e) {
+  console.log('edit functiom called')
+  e.preventDefault();
+
+  const bookingId = document.getElementById("editBookingId").value.trim();
+  const b = bookings.find(x => x.bookingId === bookingId);
+  if (!b) return alert("Booking not found");
+
+  const nights = Number(document.getElementById("editNights").value || 1);
+  const roomPricePerNight = Number(document.getElementById("editRoomAmountPerNight").value || 0);
+  const additionalAmount = Number(document.getElementById("editAdditionalAmount").value || 0);
+
+  const payload = {
+    bookingId,
+    customerName: document.getElementById("editCustomerName").value.trim(),
+    mobile: document.getElementById("editMobileNumber").value.trim(),
+    checkInDate: document.getElementById("editCheckInDate").value,
+    checkOutDate: document.getElementById("editCheckOutDate").value,
+    nights,
+    roomPricePerNight,
+    additionalAmount,
+
+    // keep rooms + status same (so rooms won’t get freed)
+    roomNumbers: Array.isArray(b.roomNumbers) ? b.roomNumbers : [],
+    status: b.status,
+
+    // store note inside raw safely
+    raw: { ...(b.raw || {}), Note: document.getElementById("editNote").value.trim() }
+  };
+
+  console.log('edit payload is ',payload)
+
+  try {
+    const res = await fetch(`${API_URL}/bookings/${encodeURIComponent(bookingId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const result = await res.json();
+    if (!res.ok || !result.success) throw new Error(result.error || "Failed to update");
+
+    alert("✅ Booking updated successfully!");
+    closeEditBookingModal();
+    await loadAllData();
+  } catch (err) {
+    console.error("❌ edit booking:", err);
+    alert("❌ " + err.message);
+  }
+
+  return false;
+}
+
+function openEditBookingModal(bookingId) {
+  const b = bookings.find(x => x.bookingId === bookingId);
+  if (!b) return;
+
+  document.getElementById("editBookingId").value = b.bookingId;
+  document.getElementById("editCustomerName").value = b.customerName || "";
+  document.getElementById("editMobileNumber").value = b.mobile || "";
+  document.getElementById("editCheckInDate").value = b.checkInDate || "";
+  document.getElementById("editCheckOutDate").value = b.checkOutDate || "";
+
+  document.getElementById("editNights").value = b.nights || 1;
+  document.getElementById("editRoomAmountPerNight").value = b.roomPricePerNight || 0;
+  document.getElementById("editAdditionalAmount").value = b.additionalAmount || 0;
+
+  document.getElementById("editNote").value = (b.raw?.Note || b.raw?.note || "") || "";
+
+  document.getElementById("editBookingModal").classList.add("active");
+}
+
+function closeEditBookingModal() {
+    document.getElementById('editBookingModal').classList.remove('active');
+}
+
 /* =========================================================
    ✅ PAYMENTS MODAL
    ========================================================= */
@@ -1942,63 +2018,181 @@ function showSection(sectionId, event) {
    ✅ MINI PRINT (kept small)
    ========================================================= */
 function printInvoiceMini(bookingId) {
-  const b = bookings.find((x) => String(x.bookingId) === String(bookingId));
-  if (!b) return alert("Booking not found");
+  const booking = bookings.find(b => String(b.bookingId) === String(bookingId));
+  if (!booking) return alert("Booking not found");
 
-  const paid = payments
-    .filter((p) => String(p.bookingId) === String(bookingId))
-    .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const bookingPayments = payments.filter(p => String(p.bookingId) === String(bookingId));
 
-  const total = Number(b.totalAmount || 0);
-  const roomAmount = Number(b.roomAmount || 0);
-  const additional = Number(b.additionalAmount || 0);
+  const totalAmount = Number(booking.totalAmount || 0);
+  const totalPaid = bookingPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-  const rawBalance = total - paid;
-  const balance = Math.max(0, rawBalance);     // never negative
-  const extraPaid = Math.max(0, -rawBalance);  // if overpaid
+  const rawBalance = totalAmount - totalPaid;
+  const balanceDue = Math.max(0, rawBalance);
+  const extraPaid = Math.max(0, -rawBalance);
 
-  const w = window.open("", "_blank", "width=800,height=600");
-  w.document.write(`
-    <html>
-    <head>
-      <title>Invoice ${bookingId}</title>
-      <style>
-        body{font-family:Arial;padding:16px}
-        h2{margin:0 0 6px}
-        .box{border:1px solid #ddd;padding:12px;border-radius:8px;margin:10px 0}
-        table{width:100%;border-collapse:collapse;margin-top:10px}
-        td{padding:6px;border-bottom:1px solid #eee}
-      </style>
-    </head>
-    <body>
-      <h2>SAI GANGA HOTEL</h2>
-      <div style="font-size:12px;color:#555">${HOTEL_ADDRESS}</div>
+  // Food orders: prefer booking.foodOrders, else fallback raw
+  const foodList =
+    Array.isArray(booking.foodOrders) && booking.foodOrders.length
+      ? booking.foodOrders
+      : (Array.isArray(booking.raw?.["Food Orders"]) ? booking.raw["Food Orders"] : []);
 
-      <div class="box">
-        <b>Booking:</b> ${b.bookingId}<br/>
-        <b>Customer:</b> ${b.customerName} (${b.mobile})<br/>
-        <b>Rooms:</b> ${(b.roomNumbers||[]).join(", ") || "TBD"}<br/>
-        <b>Check-in:</b> ${b.checkInDate} ${b.checkInTime || ""}<br/>
-        <b>Check-out:</b> ${b.checkOutDate || "-"}<br/>
-      </div>
+  let foodHTML = "";
+  if (foodList.length) {
+    foodHTML = foodList.map(i =>
+      `<tr><td>🍽️ ${i.name} (x${i.quantity})</td><td style="text-align:right;font-weight:bold;">₹${Number(i.total || 0)}</td></tr>`
+    ).join("");
+  }
 
-      <div class="box">
-        <table>
-          <tr><td>Room Amount</td><td style="text-align:right">₹${roomAmount}</td></tr>
-          <tr><td>Additional</td><td style="text-align:right">₹${additional}</td></tr>
-          <tr><td><b>Total</b></td><td style="text-align:right"><b>₹${total}</b></td></tr>
-          <tr><td>Paid</td><td style="text-align:right">₹${paid}</td></tr>
-          <tr><td><b>Balance Due</b></td><td style="text-align:right"><b>₹${balance}</b></td></tr>
-          ${extraPaid > 0 ? `<tr><td style="color:#27ae60"><b>Extra Paid</b></td><td style="text-align:right;color:#27ae60"><b>₹${extraPaid}</b></td></tr>` : ""}
+  // Payment History HTML
+  let paymentHistoryHTML = "";
+  if (bookingPayments.length > 0) {
+    paymentHistoryHTML = `
+      <div style="margin: 20px 0; padding: 15px; background: #e8f5e9; border: 2px solid #4caf50; border-radius: 8px;">
+        <h3 style="color: #2e7d32; margin: 0 0 12px 0; font-size: 16px;">💰 Payment History</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; background: white;">
+          <thead>
+            <tr style="background: #4caf50; color: white;">
+              <th style="padding: 8px; text-align: left;">Date</th>
+              <th style="padding: 8px; text-align: left;">Payment ID</th>
+              <th style="padding: 8px; text-align: left;">Mode</th>
+              <th style="padding: 8px; text-align: right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${bookingPayments.map((p, idx) => `
+              <tr style="background: ${idx % 2 === 0 ? '#f1f8e9' : 'white'};">
+                <td style="padding: 8px;">${p.date || "-"}</td>
+                <td style="padding: 8px;">${p.paymentId || "-"}</td>
+                <td style="padding: 8px; text-transform: uppercase;">${p.paymentMode || "-"}</td>
+                <td style="padding: 8px; text-align: right; font-weight: bold;">₹${Number(p.amount || 0)}</td>
+              </tr>
+            `).join("")}
+            <tr style="background: #c8e6c9; font-weight: bold;">
+              <td colspan="3" style="padding: 10px; text-align: right;">Total Paid:</td>
+              <td style="padding: 10px; text-align: right; font-size: 16px;">₹${totalPaid}</td>
+            </tr>
+          </tbody>
         </table>
       </div>
+    `;
+  }
 
-      <div style="text-align:center;margin-top:16px">Thank you 🙏</div>
-      <script>setTimeout(()=>window.print(), 300);</script>
-    </body>
-    </html>
-  `);
+  const nights = Number(booking.nights || calculateNights(booking.checkInDate, booking.checkOutDate));
+  const roomAmountPerNight = Number(booking.roomPricePerNight || 0);
+  const totalRoomAmount = Number(booking.roomAmount || (roomAmountPerNight * nights));
+  const additionalAmount = Number(booking.additionalAmount || 0);
+
+  const roomType = booking.raw?.["Room Type"] || booking.type || "N/A";
+  const address = booking.raw?.["Address"] || booking.raw?.address || "N/A";
+  const numPersons = booking.raw?.["No. of Persons"] || booking.raw?.numPersons || "N/A";
+  const note = booking.raw?.["Note"] || booking.raw?.note || "";
+
+  const w = window.open("", "_blank", "width=900,height=700");
+  w.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <title>Invoice - ${booking.bookingId}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; padding: 15px; max-width: 800px; margin: 0 auto; font-size: 13px; }
+    .header { text-align: center; margin-bottom: 15px; border-bottom: 3px solid #2c3e50; padding-bottom: 12px; }
+    h1 { margin: 8px 0 3px; color: #2c3e50; font-size: 24px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; }
+    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+    th { background: #2c3e50; color: white; }
+    .summary-box { margin: 12px 0; padding: 12px; background: #fff3e0; border-radius: 6px; border: 2px solid #ff9800; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>SAI GANGA HOTEL</h1>
+    <div style="font-size: 11px; margin: 8px 0;">${HOTEL_ADDRESS}</div>
+    <p style="color: #27ae60; font-weight: bold;">🌿 100% PURE VEG</p>
+    <div style="font-size: 18px; margin: 12px 0; font-weight: bold;">BOOKING INVOICE</div>
+    <p><strong>Invoice:</strong> ${booking.bookingId}</p>
+    <p style="font-size: 11px;">Date: ${new Date().toLocaleDateString("en-GB")} | Time: ${new Date().toLocaleTimeString("en-GB")}</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0;">
+    <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">
+      <h3 style="font-size: 13px; margin-bottom: 6px;">👤 Customer</h3>
+      <p><strong>Name:</strong> ${booking.customerName || "-"}</p>
+      <p><strong>Mobile:</strong> ${booking.mobile || "-"}</p>
+      <p><strong>Address:</strong> ${address}</p>
+      <p><strong>Persons:</strong> ${numPersons}</p>
+    </div>
+
+    <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">
+      <h3 style="font-size: 13px; margin-bottom: 6px;">🏨 Booking</h3>
+      <p><strong>Room:</strong> ${(booking.roomNumbers || []).join(", ") || "TBD"} (${roomType})</p>
+      <p><strong>Check-in:</strong> ${booking.checkInDate || "-"} ${booking.checkInTime || ""}</p>
+      <p><strong>Check-out:</strong> ${booking.checkOutDate || "Not set"} ${booking.raw?.["Check Out Time"] ? `<span style="color:#e74c3c;font-weight:bold;">${booking.raw["Check Out Time"]}</span>` : ""}</p>
+      <p><strong>Nights:</strong> ${nights}</p>
+    </div>
+  </div>
+
+  ${paymentHistoryHTML}
+
+  <table>
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th style="text-align: right;">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>🛏️ Room Charges (${nights} ${nights === 1 ? "night" : "nights"} @ ₹${roomAmountPerNight}/night)</td>
+        <td style="text-align:right;font-weight:bold;">₹${totalRoomAmount}</td>
+      </tr>
+
+      ${additionalAmount > 0 ? `
+        <tr>
+          <td>➕ Additional Charges</td>
+          <td style="text-align:right;font-weight:bold;">₹${additionalAmount}</td>
+        </tr>
+      ` : ""}
+
+      ${foodHTML}
+    </tbody>
+  </table>
+
+  <div class="summary-box">
+    <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:bold;margin-bottom:6px;">
+      <span>💵 Total Amount:</span><span>₹${totalAmount}</span>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;color:#2e7d32;margin:6px 0;">
+      <span>✅ Paid:</span><span>₹${totalPaid}</span>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;font-size:18px;font-weight:bold;color:${balanceDue === 0 ? "#2e7d32" : "#c62828"};padding-top:8px;border-top:2px solid #ff9800;">
+      <span>${balanceDue === 0 ? "✅" : "⚠️"} Balance Due:</span><span>₹${balanceDue}</span>
+    </div>
+
+    ${extraPaid > 0 ? `
+      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:bold;color:#2e7d32;margin-top:8px;">
+        <span>🟢 Extra Paid:</span><span>₹${extraPaid}</span>
+      </div>
+    ` : ""}
+  </div>
+
+  ${note ? `
+    <div style="margin: 12px 0; padding: 10px; background: #fff9c4; border-left: 4px solid #fbc02d;">
+      <p style="font-size: 11px;"><strong>📝 Note:</strong></p>
+      <p style="font-size: 12px; margin-top: 4px;">${note}</p>
+    </div>
+  ` : ""}
+
+  <div style="text-align:center;margin-top:15px;padding-top:12px;border-top:2px solid #ddd;font-size:11px;">
+    <p style="font-weight:bold;font-size:14px;">Thank you! 🙏</p>
+    <p style="margin: 8px 0; font-weight: bold;">📞 8390400008</p>
+  </div>
+</body>
+</html>`);
+
   w.document.close();
+  setTimeout(() => w.print(), 500);
 }
 
 
