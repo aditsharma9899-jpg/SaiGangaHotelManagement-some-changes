@@ -55,6 +55,22 @@ let currentAttendanceView = "calendar";
 
 /* ===================== SHARE HELPERS ===================== */
 
+function to12Hour(time24) {
+  if (!time24) return "";
+  // supports "HH:mm" or "HH:mm:ss"
+  const parts = String(time24).split(":");
+  let hh = parseInt(parts[0], 10);
+  const mm = parts[1] || "00";
+
+  if (isNaN(hh)) return String(time24);
+
+  const ampm = hh >= 12 ? "PM" : "AM";
+  hh = hh % 12;
+  if (hh === 0) hh = 12;
+
+  return `${hh}:${mm} ${ampm}`;
+}
+
 // clean new lines for URLs
 function enc(str) {
   return encodeURIComponent(String(str || ""));
@@ -2276,7 +2292,7 @@ function printInvoiceMini(bookingId) {
     <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">
       <h3 style="font-size: 13px; margin-bottom: 6px;">🏨 Booking</h3>
       <p><strong>Room:</strong> ${(booking.roomNumbers || []).join(", ") || "TBD"} (${roomType})</p>
-      <p><strong>Check-in:</strong> ${booking.checkInDate || "-"} ${booking.checkInTime || ""}</p>
+      <p><strong>Check-in:</strong> ${booking.checkInDate || "-"} ${to12Hour(booking.checkInTime)}</p>
       <p><strong>Check-out:</strong> ${booking.checkOutDate || "Not set"} ${booking.raw?.["Check Out Time"] ? `<span style="color:#e74c3c;font-weight:bold;">${booking.raw["Check Out Time"]}</span>` : ""}</p>
       <p><strong>Nights:</strong> ${nights}</p>
     </div>
