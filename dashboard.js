@@ -1,10 +1,3 @@
-/* =========================================================
-   ✅ CLEAN DASHBOARD JS (Reduced size, Mongo-based)
-   Keeps: booking + customer + docs + payments + rooms + staff
-         + attendance + food orders
-   ========================================================= */
-
-/* -------------------- CONFIG -------------------- */
 
 (async function protectPage() {
   const sessionId = localStorage.getItem("sessionId");
@@ -34,7 +27,8 @@
 
 
 
-const API_URL = "https://saigangahotelmanagement-some-changes.onrender.com/newapi";
+const API_URL ="https://saigangahotelmanagement-some-changes.onrender.com/newapi";
+
 const HOTEL_ADDRESS = `ADDRESS: NAGAR, SHRIDI ROAD, GUHA, TALUKA RAHURI,
 DIST: AHILYANAGAR, STATE: MAHARASHTRA, PINCODE: 413706`;
 
@@ -58,6 +52,130 @@ let currentAttendanceMonth = new Date();
 let currentAttendanceView = "calendar";
 
 /* -------------------- HELPERS -------------------- */
+
+/* ===================== SHARE HELPERS ===================== */
+
+// clean new lines for URLs
+function enc(str) {
+  return encodeURIComponent(String(str || ""));
+}
+
+function openShareMenu(title, text) {
+  const msg = `${title}\n\n${text}`.trim();
+
+  // WhatsApp
+  const wa = `https://wa.me/?text=${enc(msg)}`;
+
+  // Gmail compose
+  const gmail = `https://mail.google.com/mail/?view=cm&fs=1&su=${enc(title)}&body=${enc(text)}`;
+
+  // Mailto fallback (works even without gmail login)
+  const mailto = `mailto:?subject=${enc(title)}&body=${enc(text)}`;
+
+  // Small popup menu (simple)
+  const choice = prompt(
+    `Share via:\n1 = WhatsApp\n2 = Gmail\n3 = Email App\n4 = Copy\n\nEnter 1/2/3/4`
+  );
+
+  if (choice === "1") window.open(wa, "_blank");
+  else if (choice === "2") window.open(gmail, "_blank");
+  else if (choice === "3") window.open(mailto, "_blank");
+  else if (choice === "4") {
+    navigator.clipboard?.writeText(msg);
+    alert("✅ Copied to clipboard!");
+  }
+}
+
+/* -------- Share builders -------- */
+
+function shareBooking(bookingId) {
+  const b = bookings.find(x => String(x.bookingId) === String(bookingId));
+  if (!b) return alert("Booking not found");
+
+  const paid = payments
+    .filter(p => String(p.bookingId) === String(bookingId))
+    .reduce((s, p) => s + Number(p.amount || 0), 0);
+
+  const balance = Number(b.totalAmount || 0) - paid;
+
+  const text = `
+Hotel: SAI GANGA HOTEL
+Booking ID: ${b.bookingId}
+Customer: ${b.customerName} (${b.mobile})
+Rooms: ${(b.roomNumbers || []).join(", ") || "TBD"}
+Check-in: ${b.checkInDate || "-"} ${b.checkInTime || ""}
+Check-out: ${b.checkOutDate || "-"}
+Status: ${b.status || "-"}
+Nights: ${b.nights || 1}
+
+Total: ₹${Number(b.totalAmount || 0)}
+Paid: ₹${paid}
+Balance: ₹${balance}
+
+Note: ${(b.raw?.Note || b.raw?.note || "-")}
+  `.trim();
+
+  openShareMenu(`Booking ${b.bookingId}`, text);
+}
+
+function shareAdvanceBooking(bookingId) {
+  const b = bookings.find(x => String(x.bookingId) === String(bookingId));
+  if (!b) return alert("Booking not found");
+
+  const text = `
+Hotel: SAI GANGA HOTEL
+Advance Booking ID: ${b.bookingId}
+Customer: ${b.customerName} (${b.mobile})
+
+Check-in: ${b.checkInDate || "-"} ${b.checkInTime || ""}
+Check-out: ${b.checkOutDate || "-"}
+Status: ${b.status || "Advance Booking"}
+
+Estimated Total: ₹${Number(b.totalAmount || 0)}
+Advance Paid: ₹${Number(b.advance || 0)}
+Balance: ₹${Number(b.balance || 0)}
+
+Note: ${(b.raw?.note || b.raw?.Note || "-")}
+  `.trim();
+
+  openShareMenu(`Advance Booking ${b.bookingId}`, text);
+}
+
+function shareCustomer(customerId) {
+  const c = customers.find(x => String(x.customerId) === String(customerId));
+  if (!c) return alert("Customer not found");
+
+  const text = `
+Hotel: SAI GANGA HOTEL
+Customer ID: ${c.customerId}
+Name: ${c.name}
+Mobile: ${c.mobile}
+Address: ${c.address || "-"}
+Total Bookings: ${c.totalBookings || 0}
+Documents: ${(c.documents?.length || 0)}
+  `.trim();
+
+  openShareMenu(`Customer ${c.customerId}`, text);
+}
+
+function sharePayment(paymentId) {
+  const p = payments.find(x => String(x.paymentId) === String(paymentId));
+  if (!p) return alert("Payment not found");
+
+  const text = `
+Hotel: SAI GANGA HOTEL
+Payment ID: ${p.paymentId}
+Booking ID: ${p.bookingId}
+Customer: ${p.customerName}
+Amount: ₹${Number(p.amount || 0)}
+Mode: ${p.paymentMode || "-"}
+Date: ${p.date || "-"}
+Time: ${p.time || "-"}
+  `.trim();
+
+  openShareMenu(`Payment ${p.paymentId}`, text);
+}
+
 
 function time12(date = new Date()) {
   return date.toLocaleTimeString("en-US", {
@@ -1332,6 +1450,7 @@ function updateAllTables() {
                     ` : ""}
 
                     ${isConfirmed ? `<button class="action-btn btn-danger" onclick="checkoutBooking('${b.bookingId}')">📤 Checkout</button>` : ""}
+                    <button class="action-btn btn-info" onclick="shareBooking('${b.bookingId}')">📤 Share</button>
 
                     <button class="action-btn btn-success" onclick="printInvoiceMini('${b.bookingId}')">🖨️ Print</button>
                     <button class="action-btn btn-danger" onclick="deleteBooking('${b.bookingId}')">🗑️ Delete</button>
@@ -1366,7 +1485,12 @@ function updateAllTables() {
                       : `<span style="color:#95a5a6;">No documents</span>`
                   }
                 </td>
-                <td><button class="action-btn btn-danger" onclick="deleteCustomer('${c.customerId}')">🗑️ Delete</button></td>
+                <td>
+                <button class="action-btn btn-danger" onclick="deleteCustomer('${c.customerId}')">🗑️ Delete</button>
+                <button class="action-btn btn-info" onclick="shareCustomer('${c.customerId}')">📤 Share</button>
+                </td>
+                
+
               </tr>
             `;
           })
@@ -1389,7 +1513,12 @@ function updateAllTables() {
               <td>${p.paymentMode}</td>
               <td>${p.date}</td>
               <td><span class="badge badge-success">Completed</span></td>
-              <td><button class="action-btn btn-danger" onclick="deletePayment('${p.paymentId}')">🗑️ Delete</button></td>
+              <td>
+              <button class="action-btn btn-danger" onclick="deletePayment('${p.paymentId}')">🗑️ Delete</button>
+              <button class="action-btn btn-info" onclick="sharePayment('${p.paymentId}')">📤 Share</button>
+              </td>
+              
+
             </tr>
           `
           )
@@ -1418,6 +1547,8 @@ function updateAllTables() {
               <td>
   <button class="action-btn btn-warning" onclick="openEditBookingModal('${b.bookingId}')">✏️ Edit</button>
   <button class="action-btn btn-danger" onclick="deleteBooking('${b.bookingId}')">🗑️ Delete</button>
+  <button class="action-btn btn-info" onclick="shareAdvanceBooking('${b.bookingId}')">📤 Share</button>
+
 </td>
               
             </tr>
