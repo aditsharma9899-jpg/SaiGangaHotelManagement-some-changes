@@ -34,9 +34,7 @@
 
 
 
-const API_URL =
-  window.location.hostname === "https://saigangahotelmanagement-some-changes.onrender.com/newapi";
-
+const API_URL = "https://saigangahotelmanagement-some-changes.onrender.com/newapi";
 const HOTEL_ADDRESS = `ADDRESS: NAGAR, SHRIDI ROAD, GUHA, TALUKA RAHURI,
 DIST: AHILYANAGAR, STATE: MAHARASHTRA, PINCODE: 413706`;
 
