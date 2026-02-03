@@ -67,6 +67,16 @@ router.get("/", async (req, res) => {
   }
 });
 
+/*router.get("/", async (req, res) => {
+  try {
+    const docs = await Booking.find().sort({ createdAt: -1 }).lean();
+    res.json({ success: true, items: docs });
+  } catch (error) {
+    console.error("❌ Error fetching bookings:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch bookings" });
+  }
+});*/ 
+
 
 router.post("/:bookingId/add-food", async (req, res) => {
   try {
@@ -277,7 +287,7 @@ router.get("/search", async (req, res) => {
   }
 });
 
-module.exports = router;
+
 
 /* ------------------ PUT UPDATE BOOKING ------------------ */
 // ✅ PUT /newapi/bookings/:id   (id = BK0001)
@@ -291,9 +301,11 @@ router.put("/:id", async (req, res) => {
     if (!existing) return res.status(404).json({ success: false, error: "Booking not found" });
 
     // ✅ rooms: prefer normalized array coming from frontend
-    const newRooms = parseRoomNumbers(
-      body.roomNumbers ?? body["Room Number"] ?? existing.roomNumbers ?? (existing.raw?.["Room Number"] || "")
-    );
+    const hasRoomsField = ("roomNumbers" in body) || ("Room Number" in body);
+
+const newRooms = hasRoomsField
+  ? parseRoomNumbers(body.roomNumbers ?? body["Room Number"])
+  : parseRoomNumbers(existing.roomNumbers ?? existing.raw?.["Room Number"] ?? "");
 
     const oldRooms = parseRoomNumbers(existing.roomNumbers ?? existing.raw?.["Room Number"] ?? "");
 
@@ -478,6 +490,8 @@ router.post("/:id/checkout", async (req, res) => {
     const bookingId = req.params.id;
 
     const bookingDoc = await Booking.findOne({ bookingId });
+
+    
     if (!bookingDoc) {
       return res.status(404).json({ success: false, error: "Booking not found" });
     }
@@ -486,12 +500,24 @@ router.post("/:id/checkout", async (req, res) => {
     const payments = await Payment.find({ bookingId });
     const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
 
+    const balance = Number(bookingDoc.totalAmount || 0) - totalPaid;
+    if (balance > 0) {
+  return res.status(400).json({
+    success: false,
+    error: `Pending balance ₹${balance}. Clear payment first.`,
+  });
+}
+
     bookingDoc.advance = totalPaid;
     bookingDoc.balance = Number(bookingDoc.totalAmount || 0) - totalPaid;
 
-    const checkoutTime = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-    const checkoutDate = new Date().toLocaleDateString("en-GB");
+    const checkoutTime =
+  req.body?.checkoutTime ||
+  new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 
+const checkoutDate =
+  req.body?.checkoutDate ||
+  new Date().toLocaleDateString("en-GB");
     const raw = { ...(bookingDoc.raw || {}) };
     raw["Check Out Time"] = checkoutTime;
     raw["Check Out Date"] = checkoutDate;

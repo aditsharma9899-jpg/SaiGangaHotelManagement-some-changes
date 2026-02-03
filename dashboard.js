@@ -63,6 +63,19 @@ let currentAttendanceView = "calendar";
 
 /* -------------------- HELPERS -------------------- */
 
+function time12(date = new Date()) {
+  return date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function dateGB(dateObj = new Date()) {
+  return dateObj.toLocaleDateString("en-GB"); // DD/MM/YYYY
+}
+
+
 
 function $(id) {
   return document.getElementById(id);
@@ -130,6 +143,10 @@ const normalizeBooking = (b) => ({
   totalAmount: Number(b.totalAmount || 0),
   advance: Number(b.advance || 0),
   balance: Number(b.balance || 0),
+
+  // ✅ MUST ADD THIS
+  raw: b.raw || {},
+  foodOrders: Array.isArray(b.foodOrders) ? b.foodOrders : [],
 });
 
 const normalizeCustomer = (c) => ({
@@ -861,7 +878,7 @@ async function handleBookingSubmit(e) {
           amount: advancePayment,
           paymentMode: $("paymentMode")?.value || "",
           date: new Date().toLocaleDateString("en-GB"),
-          time: new Date().toLocaleTimeString("en-GB"),
+          time: time12(),
           raw: { note: "Advance payment" },
         }),
       });
@@ -977,7 +994,7 @@ async function handleAdvanceBookingSubmit(e) {
           amount: advanceAmount,
           paymentMode: "cash",
           date: new Date().toLocaleDateString("en-GB"),
-          time: new Date().toLocaleTimeString("en-GB"),
+          time: time12(),
           raw: { note: "Advance booking payment" },
         }),
       });
@@ -1272,7 +1289,9 @@ function updateAllTables() {
 
   
   if (allBookingsTable) {
-    const list = bookings.filter((b) => ["Confirmed", "Cancelled", "Advance Booking"].includes(b.status));
+    const list = bookings.filter((b) =>
+  ["Confirmed", "Cancelled", "Advance Booking", "Checked Out"].includes(b.status)
+);
 
     allBookingsTable.innerHTML = !list.length
       ? `<tr><td colspan="10" style="text-align:center;color:#7f8c8d;">No bookings yet</td></tr>`
@@ -1400,7 +1419,11 @@ function updateAllTables() {
               <td>₹${Number(b.totalAmount || 0)}</td>
               <td>₹${Number(b.advance || 0)}</td>
               <td><span class="badge badge-warning">Advance</span></td>
-              <td><button class="action-btn btn-danger" onclick="deleteBooking('${b.bookingId}')">🗑️ Delete</button></td>
+              <td>
+  <button class="action-btn btn-warning" onclick="openEditBookingModal('${b.bookingId}')">✏️ Edit</button>
+  <button class="action-btn btn-danger" onclick="deleteBooking('${b.bookingId}')">🗑️ Delete</button>
+</td>
+              
             </tr>
           `
           )
@@ -1531,7 +1554,7 @@ async function handlePaymentSubmit(e) {
       amount,
       paymentMode,
       date: new Date().toLocaleDateString("en-GB"),
-      time: new Date().toLocaleTimeString("en-GB"),
+      time: time12(),
       raw: { note, type: "Partial Payment" },
     };
 
@@ -1562,46 +1585,47 @@ async function checkoutBooking(bookingId) {
   const booking = bookings.find(b => b.bookingId === bookingId);
   if (!booking) return alert("Booking not found");
 
-  // total paid from payments list
   const paid = payments
     .filter(p => String(p.bookingId) === String(bookingId))
     .reduce((s, p) => s + (Number(p.amount) || 0), 0);
 
   const balance = Number(booking.totalAmount || 0) - paid;
 
-  const msg =
-    balance > 0
-      ? `Checkout booking ${bookingId}?\n\n⚠️ Pending Balance: ₹${balance}\nPayment can be collected later.`
-      : `Checkout booking ${bookingId}?\n\n✅ Fully paid.`;
+  // ✅ RULE #6 (pending must be 0 before checkout)
+  if (balance > 0) {
+    alert(`⚠️ Pending Balance: ₹${balance}\n\nPlease clear pending payment first, then checkout.`);
+    return;
+  }
 
-  if (!confirm(msg)) return;
+  // ✅ Manual checkout time
+  const manualTime = prompt("Enter Checkout Time (example: 02:35 PM)", time12());
+  if (!manualTime) return;
+
+  const manualDate = dateGB(); // today
+
+  if (!confirm(`Checkout booking ${bookingId}?\n\n✅ Fully paid.\n🕐 Checkout Time: ${manualTime}`)) return;
 
   try {
-    const res = await fetch(
-      `${API_URL}/bookings/${encodeURIComponent(bookingId)}/checkout`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: "Checked out from dashboard" }),
-      }
-    );
+    const res = await fetch(`${API_URL}/bookings/${encodeURIComponent(bookingId)}/checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        checkoutTime: manualTime,
+        checkoutDate: manualDate,
+      }),
+    });
 
     const result = await res.json();
+    if (!res.ok || result.success === false) throw new Error(result.error || "Checkout failed");
 
-    if (!res.ok || result.success === false) {
-      throw new Error(result.error || "Checkout failed");
-    }
-
-    alert(
-      `✅ Checkout completed!\n\n🕐 Time: ${result.checkoutTime || ""}\n📅 Date: ${result.checkoutDate || ""}\n⚠️ Pending Balance: ₹${result.booking?.balance ?? balance}`
-    );
-
+    alert(`✅ Checkout completed!\n🕐 Time: ${result.checkoutTime}\n📅 Date: ${result.checkoutDate}`);
     await loadAllData();
   } catch (err) {
     console.error("❌ checkout:", err);
     alert("❌ " + err.message);
   }
 }
+
 
 /* =========================================================
    ✅ DELETE
@@ -1798,7 +1822,7 @@ async function markAttendance(staffId, status) {
     staffId,
     staffName: s.name,
     date: new Date().toLocaleDateString("en-GB"),
-    time: new Date().toLocaleTimeString("en-GB"),
+    time: time12(),
     status,
   };
 
@@ -1946,7 +1970,7 @@ function markAttendanceFromCalendar(staffId, isoDate) {
     staffId,
     staffName: s.name,
     date: gb,
-    time: new Date().toLocaleTimeString("en-GB"),
+    time: time12(),
     status,
   });
 }
@@ -2110,7 +2134,7 @@ function printInvoiceMini(bookingId) {
     <p style="color: #27ae60; font-weight: bold;">🌿 100% PURE VEG</p>
     <div style="font-size: 18px; margin: 12px 0; font-weight: bold;">BOOKING INVOICE</div>
     <p><strong>Invoice:</strong> ${booking.bookingId}</p>
-    <p style="font-size: 11px;">Date: ${new Date().toLocaleDateString("en-GB")} | Time: ${new Date().toLocaleTimeString("en-GB")}</p>
+    <p style="font-size: 11px;">Date: ${new Date().toLocaleDateString("en-GB")} | Time: ${time12()}</p>
   </div>
 
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0;">
@@ -2536,6 +2560,5 @@ window.addEventListener("DOMContentLoaded", async () => {
     checkOutDate.addEventListener("change", update);
   }
 
-  const payForm = $("paymentForm");
-  if (payForm) payForm.addEventListener("submit", handlePaymentSubmit);
+  
 });

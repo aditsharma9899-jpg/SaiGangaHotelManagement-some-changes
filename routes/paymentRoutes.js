@@ -43,11 +43,26 @@ router.post("/", async (req, res) => {
     const date = raw.date || raw["Date"] || "";
     const time = raw.time || raw["Time"] || "";
 
-    if (!bookingId) {
-      return res.status(400).json({ success: false, error: "bookingId is required" });
+    if (!bookingId) return res.status(400).json({ success: false, error: "bookingId is required" });
+    if (!amount || amount <= 0) return res.status(400).json({ success: false, error: "Valid amount is required" });
+    if (!paymentId) return res.status(400).json({ success: false, error: "paymentId is required" });
+
+    // ✅ stop duplicate paymentId
+    const already = await Payment.findOne({ paymentId }).lean();
+    if (already) {
+      return res.status(409).json({ success: false, error: "Duplicate paymentId. Payment already recorded." });
     }
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ success: false, error: "Valid amount is required" });
+
+    // ✅ stop overpayment (server-side)
+    const booking = await Booking.findOne({ bookingId });
+    if (!booking) return res.status(404).json({ success: false, error: "Booking not found" });
+
+    const allPays = await Payment.find({ bookingId });
+    const alreadyPaid = allPays.reduce((s, p) => s + Number(p.amount || 0), 0);
+    const due = Number(booking.totalAmount || 0) - alreadyPaid;
+
+    if (amount > due) {
+      return res.status(400).json({ success: false, error: `Payment exceeds due. Due is ₹${due}.` });
     }
 
     await Payment.create({
@@ -61,19 +76,19 @@ router.post("/", async (req, res) => {
       raw,
     });
 
-    // ✅ update booking totals after saving payment
     const updated = await recalcBookingBalance(bookingId);
 
-    res.json({
+    return res.json({
       success: true,
       totalPaid: updated?.totalPaid ?? 0,
       booking: updated?.booking ?? null,
     });
   } catch (err) {
     console.error("❌ payments post:", err);
-    res.status(500).json({ success: false, error: "Failed to add payment" });
+    return res.status(500).json({ success: false, error: "Failed to add payment" });
   }
 });
+
 
 // ✅ DELETE /newapi/payments/:id  (paymentId)
 router.delete("/:id", async (req, res) => {
