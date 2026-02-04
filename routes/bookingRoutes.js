@@ -77,7 +77,6 @@ router.get("/", async (req, res) => {
   }
 });*/ 
 
-
 router.post("/:bookingId/add-food", async (req, res) => {
   try {
     const bookingId = req.params.bookingId;
@@ -85,27 +84,38 @@ router.post("/:bookingId/add-food", async (req, res) => {
     const foodItems = Array.isArray(req.body.foodItems) ? req.body.foodItems : [];
     const foodTotal = Number(req.body.foodTotal || 0);
 
-    if (!foodItems.length || foodTotal <= 0) {
-      return res.status(400).json({ success: false, error: "foodItems and foodTotal are required" });
+    // ✅ allow empty cart + 0 total (for clearing)
+    if (foodTotal < 0) {
+      return res.status(400).json({ success: false, error: "foodTotal cannot be negative" });
     }
+
+    // ✅ keep only items with qty > 0 (ignore qty 0 items)
+    const cleanItems = foodItems
+      .filter(i => Number(i.quantity || 0) > 0)
+      .map(i => ({
+        name: i.name,
+        price: Number(i.price || 0),
+        quantity: Number(i.quantity || 0),
+        total: Number(i.total || 0),
+      }));
+
+    // ✅ recompute total from cleanItems (so no mismatch)
+    const cleanTotal = cleanItems.reduce((s, i) => s + (Number(i.price) * Number(i.quantity)), 0);
 
     const booking = await Booking.findOne({ bookingId });
     if (!booking) return res.status(404).json({ success: false, error: "Booking not found" });
 
-    booking.foodOrders = Array.isArray(booking.foodOrders) ? booking.foodOrders : [];
-    booking.foodOrders.push(...foodItems);
-
-    const oldAdditional = Number(booking.additionalAmount || 0);
-    booking.additionalAmount = oldAdditional + foodTotal;
+    // ✅ REPLACE mode
+    booking.foodOrders = cleanItems;
+    booking.additionalAmount = cleanTotal;
 
     const roomAmount = Number(booking.roomAmount || 0);
     booking.totalAmount = roomAmount + Number(booking.additionalAmount || 0);
 
-    // ✅ recalc paid from payments
     const payDocs = await Payment.find({ bookingId });
     const totalPaid = payDocs.reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-    booking.advance = totalPaid; // keep as total paid
+    booking.advance = totalPaid;
     booking.balance = booking.totalAmount - totalPaid;
 
     await booking.save();
@@ -126,7 +136,6 @@ router.post("/:bookingId/add-food", async (req, res) => {
     res.status(500).json({ success: false, error: "Failed to add food" });
   }
 });
-
 
 /* ------------------ POST CREATE (from previous message) ------------------ */
 router.post("/", async (req, res) => {
