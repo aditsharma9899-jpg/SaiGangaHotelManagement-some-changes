@@ -703,6 +703,23 @@ table td:last-child {
     transform: scale(0.95);
 }
 
+/* Keep Actions column visible */
+#userFoodCart table td:last-child,
+#userFoodCart table th:last-child {
+  position: sticky;
+  right: 0;
+  background: white;
+  z-index: 5;
+  min-width: 230px;
+}
+
+/* Make action buttons line properly */
+#userFoodCartTable td:last-child {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 /* ==================== RESPONSIVE DESIGN ==================== */
 
 /* Tablet Screens */
@@ -1079,4 +1096,44 @@ table td:last-child {
         box-shadow: none;
         border: 1px solid #ddd;
     }
+}
+
+/* Sticky Actions column (keeps table layout normal) */
+#userFoodCart table th:last-child,
+#userFoodCart table td:last-child {
+  position: sticky;
+  right: 0;
+  background: #fff;
+  z-index: 5;
+  min-width: 200px;
+  box-shadow: -8px 0 12px rgba(0,0,0,0.06);
+}
+
+/* Buttons wrapper (instead of making td flex) */
+.cart-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap; /* if screen is small, buttons go next line */
+}
+
+/* Small button */
+.btn-sm {
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  border-radius: 6px !important;
+}
+
+/* Optional: even smaller on mobile */
+@media (max-width: 600px) {
+  #userFoodCart table th:last-child,
+  #userFoodCart table td:last-child {
+    min-width: 160px;
+  }
+  .btn-sm {
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+  }
 }
