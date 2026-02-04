@@ -39,9 +39,10 @@
                 <div class="menu-item" onclick="showSection('customers', event)">
                     👥 Customers
                 </div>
-                <div class="menu-item" onclick="showSection('food', event)">
-                    🍽️ Food Orders
-                </div>
+                <div class="menu-item" onclick="showSection('userFoodCart', event)">
+  🛒 Users Food Cart
+</div>
+                
                 <div class="menu-item" onclick="showSection('foodManager', event)">
                     ⚙️ Food Menu Manager
                 </div>
@@ -78,6 +79,65 @@
                     <div class="user-avatar">A</div>
                 </div>
             </div>
+            <div id="userFoodCart" class="content-section">
+  <div class="card">
+    <div class="card-header">
+      <h2>🛒 Users Food Cart</h2>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <input id="cartBookingSearch" type="text" placeholder="🔍 Search booking id / customer name..."
+          style="padding:10px;border-radius:5px;border:1px solid #ddd;width:300px;max-width:100%;"
+          onkeyup="renderUserFoodCarts()"
+        />
+      </div>
+    </div>
+    <!-- INLINE FOOD PICKER (hidden by default) -->
+<div id="inlineFoodPicker" style="display:none; margin:15px 0; padding:15px; border:2px solid #3498db; border-radius:10px; background:#f0f8ff;">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div>
+      <h3 style="margin:0;">🍽️ Add Food to Booking: <span id="inlineFoodBookingId"></span></h3>
+      <small style="color:#7f8c8d;">Use + / − to set quantity. Then click Close.</small>
+    </div>
+    <button class="btn btn-danger" onclick="closeInlineFood()">✖ Close</button>
+  </div>
+
+  <div style="margin-top:12px;">
+    <input id="inlineFoodSearch" placeholder="🔍 Search food..."
+      style="padding:10px;border-radius:6px;border:1px solid #ddd;width:260px;max-width:100%;"
+      onkeyup="renderInlineFoodMenu()"
+    />
+  </div>
+
+  <div id="inlineFoodMenu" style="margin-top:12px;"></div>
+</div>
+
+
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Booking ID</th>
+            <th>Customer</th>
+            <th>Rooms</th>
+            <th>Cart Items</th>
+            <th>Food Total</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="userFoodCartTable" style="overflow-x: hidden;">
+          <tr>
+           <td colspan="6" style="text-align:center;color:#7f8c8d;">No carts yet</td>
+
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:12px; font-size:12px; color:#7f8c8d;">
+      Tip: Open a booking cart → add items → confirm → it will save food into booking + update totals.
+    </div>
+  </div>
+</div>
+
 
             <!-- Dashboard Section -->
             <div id="dashboard" class="content-section active">
