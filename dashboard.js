@@ -27,12 +27,16 @@
 
 
 
-const API_URL ="https://saigangahotelmanagement-some-changes.onrender.com/newapi";
+const API_URL = "https://saigangahotelmanagement-some-changes.onrender.com/newapi";
 
 const HOTEL_ADDRESS = `ADDRESS: NAGAR, SHRIDI ROAD, GUHA, TALUKA RAHURI,
 DIST: AHILYANAGAR, STATE: MAHARASHTRA, PINCODE: 413706`;
 
 /* -------------------- STATE -------------------- */
+const userFoodCarts = {};
+
+let currentCartBookingId = null;
+let inlineFoodQty = {}; // 
 const rooms = { first: [], second: [], third: [] };
 let bookings = [],
   customers = [],
@@ -54,7 +58,6 @@ let currentAttendanceView = "calendar";
 /* -------------------- HELPERS -------------------- */
 
 /* ===================== SHARE HELPERS ===================== */
-
 function to12Hour(time24) {
   if (!time24) return "";
   // supports "HH:mm" or "HH:mm:ss"
@@ -70,6 +73,7 @@ function to12Hour(time24) {
 
   return `${hh}:${mm} ${ampm}`;
 }
+
 
 // clean new lines for URLs
 function enc(str) {
@@ -225,6 +229,178 @@ function getList(json) {
     []
   );
 }
+function changeCartQty(bookingId, idx, change) {
+  const cart = userFoodCarts[bookingId] || [];
+  if (!cart[idx]) return;
+
+  cart[idx].quantity = Math.max(0, Number(cart[idx].quantity || 0) + change);
+
+  // ✅ if qty becomes 0 remove only that item
+  if (cart[idx].quantity <= 0) {
+    cart.splice(idx, 1);
+  } else {
+    cart[idx].total = Number(cart[idx].price || 0) * Number(cart[idx].quantity || 0);
+  }
+
+  renderUserFoodCarts();
+}
+
+
+function removeCartItem(bookingId, idx) {
+  if (!userFoodCarts[bookingId]) return;
+  userFoodCarts[bookingId].splice(idx, 1);
+  renderUserFoodCarts();
+}
+
+async function clearUserCart(bookingId) {
+  if (!confirm("Empty this cart?")) return;
+
+  userFoodCarts[bookingId] = [];
+  renderUserFoodCarts();
+
+  // ✅ update booking food to 0 as well
+  try {
+    const res = await fetch(`${API_URL}/bookings/${encodeURIComponent(bookingId)}/add-food`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ foodItems: [], foodTotal: 0 })
+    });
+
+    const result = await res.json();
+    if (!res.ok || !result.success) throw new Error(result.error || "Failed to clear food");
+
+    await loadAllData();
+  } catch (err) {
+    console.error(err);
+    alert("❌ " + err.message);
+  }
+}
+
+function openInlineFood(bookingId) {
+  currentCartBookingId = bookingId;
+
+  userFoodCarts[bookingId] = Array.isArray(userFoodCarts[bookingId]) ? userFoodCarts[bookingId] : [];
+  inlineFoodQty = {};
+
+  // Pre-fill qty from cart (optional)
+  userFoodCarts[bookingId].forEach(ci => {
+    const item = (foodItems || []).find(f => f.name === ci.name && Number(f.price) === Number(ci.price));
+    if (item) inlineFoodQty[item.id] = Number(ci.quantity || 0);
+  });
+
+  const picker = document.getElementById("inlineFoodPicker");
+  if (picker) picker.style.display = "block";
+
+  const idSpan = document.getElementById("inlineFoodBookingId");
+  if (idSpan) idSpan.textContent = bookingId;
+
+  const search = document.getElementById("inlineFoodSearch");
+  if (search) search.value = "";
+
+  renderInlineFoodMenu();
+
+  picker?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderInlineFoodMenu() {
+  const box = document.getElementById("inlineFoodMenu");
+  if (!box) return;
+
+  const q = (document.getElementById("inlineFoodSearch")?.value || "").trim().toLowerCase();
+
+  const list = (foodItems || [])
+    .filter(f => f.isAvailable !== false)
+    .filter(f => !q || String(f.name || "").toLowerCase().includes(q));
+
+  if (!list.length) {
+    box.innerHTML = `<div style="color:#7f8c8d; padding:10px;">No food items found</div>`;
+    return;
+  }
+
+  box.innerHTML = list.map(f => {
+    const qty = Number(inlineFoodQty[f.id] || 0);
+
+    return `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px; background:white; border:1px solid #e5e5e5; border-radius:10px; margin:8px 0;">
+        <div>
+          <b>${f.name}</b>
+          <div style="font-size:12px; color:#666;">₹${Number(f.price || 0)}</div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button class="btn btn-danger" style="padding:4px 10px;" onclick="updateInlineFoodQty('${f.id}', -1)">−</button>
+          <span style="min-width:22px; text-align:center; font-weight:bold;">${qty}</span>
+          <button class="btn btn-success" style="padding:4px 10px;" onclick="updateInlineFoodQty('${f.id}', 1)">+</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function updateInlineFoodQty(foodId, change) {
+  inlineFoodQty[foodId] = Math.max(0, Number(inlineFoodQty[foodId] || 0) + change);
+  renderInlineFoodMenu();
+}
+
+function closeInlineFood() {
+  const bookingId = currentCartBookingId;
+
+  const picker = document.getElementById("inlineFoodPicker");
+  if (picker) picker.style.display = "none";
+
+  if (!bookingId) return;
+
+  // convert inline qty -> cart
+  const cart = [];
+  Object.keys(inlineFoodQty).forEach(foodId => {
+    const qty = Number(inlineFoodQty[foodId] || 0);
+    if (qty <= 0) return;
+
+    const item = (foodItems || []).find(f => String(f.id) === String(foodId));
+    if (!item) return;
+
+    const price = Number(item.price || 0);
+    cart.push({
+      name: item.name,
+      price,
+      quantity: qty,
+      total: price * qty
+    });
+  });
+
+  userFoodCarts[bookingId] = cart;
+  currentCartBookingId = null;
+
+  renderUserFoodCarts();
+}
+async function confirmUserCart(bookingId) {
+  const cart = userFoodCarts[bookingId] || [];
+  if (!cart.length) return alert("Cart is empty!");
+
+  const foodTotal = cart.reduce((s, i) => s + Number(i.total || 0), 0);
+
+  try {
+    const res = await fetch(`${API_URL}/bookings/${encodeURIComponent(bookingId)}/add-food`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ foodItems: cart, foodTotal })
+    });
+
+    const result = await res.json();
+    if (!res.ok || !result.success) throw new Error(result.error || "Failed to save food");
+
+    alert(`✅ Food saved in booking ${bookingId}\nFood Total: ₹${foodTotal}`);
+
+    // ✅ IMPORTANT: do NOT clear cart here
+    await loadAllData();     // refresh booking totals
+    renderUserFoodCarts();   // refresh table
+  } catch (err) {
+    console.error(err);
+    alert("❌ " + err.message);
+  }
+}
+
+
 
 function calculateNights(checkInISO, checkOutISO) {
   if (!checkInISO || !checkOutISO) return 1;
@@ -837,6 +1013,84 @@ async function uploadDocuments(customerId, bookingId) {
 
   return data.documents || [];
 }
+
+console.log("✅ renderUserFoodCarts running");
+function renderUserFoodCarts() {
+  const tbody = document.getElementById("userFoodCartTable");
+//  console.log("Row for", b.bookingId, "will have buttons");
+  if (!tbody) return;
+
+  const q = (document.getElementById("cartBookingSearch")?.value || "").trim().toLowerCase();
+
+  // show only Confirmed bookings
+  console.log('bookings',bookings)
+  const list = (bookings || []).filter(b => {
+    if (String(b.status || "").trim().toLowerCase() !== "confirmed") return false;
+    if (!q) return true;
+
+    return (
+      String(b.bookingId || "").toLowerCase().includes(q) ||
+      String(b.customerName || "").toLowerCase().includes(q)
+    );
+  });
+
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#7f8c8d;">No confirmed bookings found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(b => {
+    
+    const bookingId = b.bookingId;
+   
+
+    // init cart if missing
+    userFoodCarts[bookingId] = Array.isArray(userFoodCarts[bookingId]) ? userFoodCarts[bookingId] : [];
+
+    const cart = userFoodCarts[bookingId];
+    const cartTotal = cart.reduce((s, i) => s + Number(i.total || 0), 0);
+
+    const cartItemsHTML = cart.length
+      ? cart.map((i, idx) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0;">
+            <div style="flex:1;">
+              <b>${i.name}</b>
+              <div style="font-size:11px;color:#666;">₹${Number(i.price || 0)} each</div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:6px;">
+              <button class="btn btn-danger" style="padding:2px 10px;" onclick="changeCartQty('${bookingId}', ${idx}, -1)">−</button>
+              <span style="min-width:22px;text-align:center;font-weight:bold;">${Number(i.quantity || 0)}</span>
+              <button class="btn btn-success" style="padding:2px 10px;" onclick="changeCartQty('${bookingId}', ${idx}, 1)">+</button>
+
+              <span style="min-width:70px;text-align:right;font-weight:bold;">₹${Number(i.total || 0)}</span>
+              <button class="btn btn-danger" style="padding:2px 8px;" onclick="removeCartItem('${bookingId}', ${idx})">x</button>
+            </div>
+          </div>
+        `).join("")
+      : `<span style="color:#7f8c8d;">Empty</span>`;
+       console.log("Row for", b.bookingId, "will have buttons");
+
+    return `
+      <tr>
+        <td>${bookingId}</td>
+        <td>${b.customerName || "-"}</td>
+        <td>${(b.roomNumbers || []).join(", ") || "TBD"}</td>
+        <td>${cartItemsHTML}</td>
+        <td><b>₹${cartTotal}</b></td>
+        <td class="cart-actions-cell">
+  <div class="cart-actions">
+    <button class="btn btn-primary btn-sm" onclick="openInlineFood('${bookingId}')">➕ Add</button>
+    <button class="btn btn-success btn-sm" onclick="confirmUserCart('${bookingId}')">✅ Confirm</button>
+    <button class="btn btn-danger btn-sm" onclick="clearUserCart('${bookingId}')">🧹 Empty</button>
+  </div>
+</td>
+
+      </tr>
+    `;
+  }).join("");
+}
+
 
 async function viewCustomerDocuments(customerId) {
   try {
@@ -1456,7 +1710,7 @@ function updateAllTables() {
                 <td>
                   <div class="action-buttons">
                     ${isConfirmed ? `
-                      <button class="action-btn btn-primary" onclick="openFoodMenuForBooking('${b.bookingId}')">🍽️ Food</button>
+                      
                       <button class="action-btn btn-warning" onclick="openEditBookingModal('${b.bookingId}')">✏️ Edit</button>
                     ` : ""}
 
@@ -1762,7 +2016,12 @@ async function checkoutBooking(bookingId) {
     if (!res.ok || result.success === false) throw new Error(result.error || "Checkout failed");
 
     alert(`✅ Checkout completed!\n🕐 Time: ${result.checkoutTime}\n📅 Date: ${result.checkoutDate}`);
-    await loadAllData();
+
+// ✅ clear cart only now (after checkout)
+delete userFoodCarts[bookingId];
+
+await loadAllData();
+renderUserFoodCarts();
   } catch (err) {
     console.error("❌ checkout:", err);
     alert("❌ " + err.message);
@@ -2172,13 +2431,14 @@ function showSection(sectionId, event) {
   if (sectionId === "attendanceCalendar") renderAttendanceCalendar();
   if (sectionId === "roomStatus") showRoomStatus();
 
-  if (sectionId === "food" && !currentBookingForFood) {
+  if (sectionId === "userFoodCart") renderUserFoodCarts();
+  /*if (sectionId === "food" && !currentBookingForFood) {
     const addFoodBtn = document.querySelector("#food .btn-success");
     if (addFoodBtn) {
       addFoodBtn.textContent = "Create Food Order (Walk-in)";
       addFoodBtn.onclick = createFoodOrder;
     }
-  }
+  }*/
 }
 
 /* =========================================================
@@ -2674,6 +2934,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   loadTheme();
   await loadFoodItemsFromServer();
   await loadAllData();
+  renderUserFoodCarts()
   renderAttendanceCalendar();
   renderFoodMenuManager()
 
