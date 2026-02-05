@@ -2695,7 +2695,7 @@ function searchBookings() {
           <span class="badge badge-success">${b.status || "-"}</span>
         </td>
         <td>
-          <button class="action-btn btn-success" onclick="printInvoice('${b.bookingId}')">🖨️</button>
+          <button class="action-btn btn-success" onclick="printInvoiceMini('${b.bookingId}')">🖨️</button>
           <button class="action-btn btn-danger" onclick="deleteBooking('${b.bookingId}')">🗑️</button>
         </td>
       </tr>
