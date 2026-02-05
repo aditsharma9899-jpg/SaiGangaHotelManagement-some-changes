@@ -1138,8 +1138,17 @@ async function viewCustomerDocuments(customerId) {
                       </div>
 
                       <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        ${url ? `<a href="${url}" target="_blank" class="btn btn-primary" style="padding:8px 12px; text-decoration:none;">🔗 Open</a>` : ""}
-                        ${url ? `<a href="${url}" download class="btn btn-success" style="padding:8px 12px; text-decoration:none;">⬇️ Download</a>` : ""}
+                        
+                        ${url ? `
+  <a href="${url}" target="_blank" class="btn btn-primary"
+     style="padding:8px 12px; text-decoration:none;">🔗 Open</a>
+
+  <button class="btn btn-success"
+    style="padding:8px 12px;"
+    onclick="forceDownloadFile('${url}', '${String(name).replace(/'/g, "\\'")}')">
+    ⬇️ Download
+  </button>
+` : ""}
                       </div>
                     </div>
 
