@@ -299,10 +299,14 @@ function removeCartItem(bookingId, idx) {
 async function clearUserCart(bookingId) {
   if (!confirm("Empty this cart?")) return;
 
+  // 1) clear UI cart
   userFoodCarts[bookingId] = [];
   renderUserFoodCarts();
 
-  // ✅ update booking food to 0 as well
+  // ✅ 2) clear draftCart in DB (THIS WAS MISSING)
+  await saveCartToDB(bookingId);
+
+  // 3) clear confirmed foodOrders in booking (optional but you already do it)
   try {
     const res = await fetch(`${API_URL}/bookings/${encodeURIComponent(bookingId)}/add-food`, {
       method: "POST",
@@ -313,7 +317,7 @@ async function clearUserCart(bookingId) {
     const result = await res.json();
     if (!res.ok || !result.success) throw new Error(result.error || "Failed to clear food");
 
-    await loadAllData();
+    await loadAllData(); // reload UI
   } catch (err) {
     console.error(err);
     alert("❌ " + err.message);
