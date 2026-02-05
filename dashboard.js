@@ -2518,7 +2518,7 @@ function printInvoiceMini(bookingId) {
   const totalRoomAmount = Number(booking.roomAmount || (roomAmountPerNight * nights));
   const additionalAmount = Number(booking.additionalAmount || 0);
 
-  const roomType = booking.raw?.["Room Type"] || booking.type || "N/A";
+  const roomType = booking.raw?.["Room Type"] || booking.type || ' ';
   const address = booking.raw?.["Address"] || booking.raw?.address || "N/A";
   const numPersons = booking.raw?.["No. of Persons"] || booking.raw?.numPersons || "N/A";
   const note = booking.raw?.["Note"] || booking.raw?.note || "";
