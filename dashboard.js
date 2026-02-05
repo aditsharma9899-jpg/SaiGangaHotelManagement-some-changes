@@ -58,6 +58,21 @@ let currentAttendanceView = "calendar";
 /* -------------------- HELPERS -------------------- */
 
 /* ===================== SHARE HELPERS ===================== */
+
+async function saveCartToDB(bookingId) {
+  try {
+    const cart = userFoodCarts[bookingId] || [];
+    await fetch(`${API_URL}/bookings/${encodeURIComponent(bookingId)}/cart`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cart })
+    });
+  } catch (err) {
+    console.error("saveCartToDB error:", err);
+  }
+}
+
+
 async function forceDownloadFile(url, filename = "download") {
   try {
     if (!url) return alert("❌ File URL missing");
@@ -83,6 +98,7 @@ async function forceDownloadFile(url, filename = "download") {
     window.open(url, "_blank");
   }
 }
+
 function to12Hour(time24) {
   if (!time24) return "";
   // supports "HH:mm" or "HH:mm:ss"
@@ -268,6 +284,8 @@ function changeCartQty(bookingId, idx, change) {
   }
 
   renderUserFoodCarts();
+  saveCartToDB(bookingId);
+
 }
 
 
@@ -275,6 +293,7 @@ function removeCartItem(bookingId, idx) {
   if (!userFoodCarts[bookingId]) return;
   userFoodCarts[bookingId].splice(idx, 1);
   renderUserFoodCarts();
+  saveCartToDB(bookingId);
 }
 
 async function clearUserCart(bookingId) {
@@ -386,6 +405,7 @@ function closeInlineFood() {
 
     const price = Number(item.price || 0);
     cart.push({
+      foodId: String(item.id),           // ✅ keep foodId also
       name: item.name,
       price,
       quantity: qty,
@@ -397,10 +417,16 @@ function closeInlineFood() {
   currentCartBookingId = null;
 
   renderUserFoodCarts();
+
+  // ✅ THIS WAS MISSING
+  saveCartToDB(bookingId);
 }
 async function confirmUserCart(bookingId) {
   const cart = userFoodCarts[bookingId] || [];
   if (!cart.length) return alert("Cart is empty!");
+
+  // ✅ make sure latest cart is in DB
+  await saveCartToDB(bookingId);
 
   const foodTotal = cart.reduce((s, i) => s + Number(i.total || 0), 0);
 
@@ -416,14 +442,14 @@ async function confirmUserCart(bookingId) {
 
     alert(`✅ Food saved in booking ${bookingId}\nFood Total: ₹${foodTotal}`);
 
-    // ✅ IMPORTANT: do NOT clear cart here
-    await loadAllData();     // refresh booking totals
-    renderUserFoodCarts();   // refresh table
+    await loadAllData();
+    renderUserFoodCarts();
   } catch (err) {
     console.error(err);
     alert("❌ " + err.message);
   }
 }
+
 
 
 
@@ -587,6 +613,21 @@ async function loadAllData() {
     rooms.third = roomList.filter((r) => r.floor === "third");
 
     bookings = getList(bookingsJson).map(normalizeBooking);
+    // ✅ Load saved carts from DB for confirmed bookings
+await Promise.all(
+  (bookings || [])
+    .filter(b => String(b.status || "").toLowerCase() === "confirmed")
+    .map(async (b) => {
+      try {
+        const r = await fetch(`${API_URL}/bookings/${encodeURIComponent(b.bookingId)}/cart`);
+        const j = await r.json();
+        if (r.ok && j.success) userFoodCarts[b.bookingId] = j.cart || [];
+      } catch (e) {}
+    })
+);
+
+renderUserFoodCarts();
+
     customers = getList(customersJson).map(normalizeCustomer);
     payments = getList(paymentsJson).map(normalizePayment);
     staff = staffJson.items || staffJson || [];
@@ -597,6 +638,8 @@ async function loadAllData() {
       .map((b) => parseInt(String(b.bookingId).replace("BK", ""), 10))
       .filter((n) => !isNaN(n));
     bookingCounter = ids.length ? Math.max(...ids) + 1 : 1;
+
+
 
     updateRoomstatusFromBookings();
     initializeRooms();
@@ -1060,7 +1103,7 @@ function renderUserFoodCarts() {
   });
 
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#7f8c8d;">No confirmed bookings found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#7f8c8d;">No confirmed bookings found</td></tr>`;
     return;
   }
 
@@ -1076,24 +1119,24 @@ function renderUserFoodCarts() {
     const cartTotal = cart.reduce((s, i) => s + Number(i.total || 0), 0);
 
     const cartItemsHTML = cart.length
-      ? cart.map((i, idx) => `
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0;">
-            <div style="flex:1;">
-              <b>${i.name}</b>
-              <div style="font-size:11px;color:#666;">₹${Number(i.price || 0)} each</div>
-            </div>
+  ? cart.map((i, idx) => `
+      <div class="cart-item-row">
+        <div class="cart-item-left">
+          <b>${i.name}</b>
+          <div style="font-size:11px;color:#666;">₹${Number(i.price || 0)} each</div>
+        </div>
 
-            <div style="display:flex;align-items:center;gap:6px;">
-              <button class="btn btn-danger" style="padding:2px 10px;" onclick="changeCartQty('${bookingId}', ${idx}, -1)">−</button>
-              <span style="min-width:22px;text-align:center;font-weight:bold;">${Number(i.quantity || 0)}</span>
-              <button class="btn btn-success" style="padding:2px 10px;" onclick="changeCartQty('${bookingId}', ${idx}, 1)">+</button>
+        <div class="cart-item-right">
+          <button class="btn btn-danger" style="padding:2px 10px;" onclick="changeCartQty('${bookingId}', ${idx}, -1)">−</button>
+          <span style="min-width:22px;text-align:center;font-weight:bold;">${Number(i.quantity || 0)}</span>
+          <button class="btn btn-success" style="padding:2px 10px;" onclick="changeCartQty('${bookingId}', ${idx}, 1)">+</button>
+          <span style="min-width:70px;text-align:right;font-weight:bold;">₹${Number(i.total || 0)}</span>
+          
+        </div>
+      </div>
+    `).join("")
+  : `<span style="color:#7f8c8d;">Empty</span>`;
 
-              <span style="min-width:70px;text-align:right;font-weight:bold;">₹${Number(i.total || 0)}</span>
-              <button class="btn btn-danger" style="padding:2px 8px;" onclick="removeCartItem('${bookingId}', ${idx})">x</button>
-            </div>
-          </div>
-        `).join("")
-      : `<span style="color:#7f8c8d;">Empty</span>`;
        console.log("Row for", b.bookingId, "will have buttons");
 
     return `
@@ -1102,9 +1145,9 @@ function renderUserFoodCarts() {
         <td>${b.customerName || "-"}</td>
         <td>${(b.roomNumbers || []).join(", ") || "TBD"}</td>
         <td>${cartItemsHTML}</td>
-        <td><b>₹${cartTotal}</b></td>
+        
         <td class="cart-actions-cell">
-  <div class="cart-actions">
+  <div class="cart-actions" style={position:'absolute'}>
     <button class="btn btn-primary btn-sm" onclick="openInlineFood('${bookingId}')">➕ Add</button>
     <button class="btn btn-success btn-sm" onclick="confirmUserCart('${bookingId}')">✅ Confirm</button>
     <button class="btn btn-danger btn-sm" onclick="clearUserCart('${bookingId}')">🧹 Empty</button>
@@ -1163,7 +1206,7 @@ async function viewCustomerDocuments(customerId) {
                       </div>
 
                       <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                        
+                       
                         ${url ? `
   <a href="${url}" target="_blank" class="btn btn-primary"
      style="padding:8px 12px; text-decoration:none;">🔗 Open</a>
@@ -1174,6 +1217,7 @@ async function viewCustomerDocuments(customerId) {
     ⬇️ Download
   </button>
 ` : ""}
+
                       </div>
                     </div>
 
@@ -2052,7 +2096,9 @@ async function checkoutBooking(bookingId) {
     alert(`✅ Checkout completed!\n🕐 Time: ${result.checkoutTime}\n📅 Date: ${result.checkoutDate}`);
 
 // ✅ clear cart only now (after checkout)
-delete userFoodCarts[bookingId];
+userFoodCarts[bookingId] = [];
+await saveCartToDB(bookingId);   // ✅ clears draftCart in DB too
+delete userFoodCarts[bookingId]; // optional
 
 await loadAllData();
 renderUserFoodCarts();
@@ -2482,6 +2528,8 @@ function printInvoiceMini(bookingId) {
   const booking = bookings.find(b => String(b.bookingId) === String(bookingId));
   if (!booking) return alert("Booking not found");
 
+  console.log('printinvoice booking',booking)
+
   const bookingPayments = payments.filter(p => String(p.bookingId) === String(bookingId));
 
   const totalAmount = Number(booking.totalAmount || 0);
@@ -2543,10 +2591,10 @@ function printInvoiceMini(bookingId) {
   const totalRoomAmount = Number(booking.roomAmount || (roomAmountPerNight * nights));
   const additionalAmount = Number(booking.additionalAmount || 0);
 
-  const roomType = booking.raw?.["Room Type"] || booking.type || ' ';
-  const address = booking.raw?.["Address"] || booking.raw?.address || "N/A";
-  const numPersons = booking.raw?.["No. of Persons"] || booking.raw?.numPersons || "N/A";
-  const note = booking.raw?.["Note"] || booking.raw?.note || "";
+  const roomType = '';
+  const address = '';
+  const numPersons = '';
+  const note = '';
 
   const w = window.open("", "_blank", "width=900,height=700");
   w.document.write(`<!DOCTYPE html>
@@ -2607,7 +2655,12 @@ function printInvoiceMini(bookingId) {
         <td style="text-align:right;font-weight:bold;">₹${totalRoomAmount}</td>
       </tr>
 
-      
+      ${additionalAmount > 0 ? `
+        <tr>
+          <td>➕ Additional Charges</td>
+          <td style="text-align:right;font-weight:bold;">₹${additionalAmount}</td>
+        </tr>
+      ` : ""}
 
       ${foodHTML}
     </tbody>
@@ -2963,8 +3016,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   loadTheme();
   await loadFoodItemsFromServer();
   await loadAllData();
-  renderUserFoodCarts()
-  renderAttendanceCalendar();
+   renderAttendanceCalendar();
   renderFoodMenuManager()
 
   const bookingForm = $("bookingForm");
