@@ -9,6 +9,17 @@ const foodItemSchema = new mongoose.Schema(
   },
   { _id: false }
 );
+const cartItemSchema = new mongoose.Schema(
+  {
+    foodId: { type: String, default: "" }, // FOOD0001 (optional but good)
+    name: { type: String, default: "" },
+    price: { type: Number, default: 0 },
+    quantity: { type: Number, default: 0 },
+    total: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
 
 const bookingSchema = new mongoose.Schema(
   {
@@ -33,6 +44,9 @@ checkOutDate: { type: String, default: "" },
     advance: { type: Number, default: 0 },
     balance: { type: Number, default: 0 },
     foodOrders: { type: [foodItemSchema], default: [] },
+    cart: { type: [foodItemSchema], default: [] },
+    draftCart: { type: [cartItemSchema], default: [] },
+draftCartUpdatedAt: { type: Date },
 
     // ✅ store full original bookingData also (so no UI breaks)
     raw: { type: Object, default: {} }
