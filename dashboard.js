@@ -2607,12 +2607,7 @@ function printInvoiceMini(bookingId) {
         <td style="text-align:right;font-weight:bold;">₹${totalRoomAmount}</td>
       </tr>
 
-      ${additionalAmount > 0 ? `
-        <tr>
-          <td>➕ Additional Charges</td>
-          <td style="text-align:right;font-weight:bold;">₹${additionalAmount}</td>
-        </tr>
-      ` : ""}
+      
 
       ${foodHTML}
     </tbody>
