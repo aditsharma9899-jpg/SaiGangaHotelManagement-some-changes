@@ -77,6 +77,52 @@ router.get("/", async (req, res) => {
   }
 });*/ 
 
+router.get("/:bookingId/cart", async (req, res) => {
+  try {
+    const bookingId = req.params.bookingId;
+
+    const booking = await Booking.findOne({ bookingId }).lean();
+    if (!booking) return res.status(404).json({ success: false, error: "Booking not found" });
+
+    return res.json({ success: true, cart: booking.draftCart || [] });
+  } catch (err) {
+    console.error("❌ get cart:", err);
+    res.status(500).json({ success: false, error: "Failed to get cart" });
+  }
+});
+
+router.put("/:bookingId/cart", async (req, res) => {
+  try {
+    const bookingId = req.params.bookingId;
+    const cart = Array.isArray(req.body.cart) ? req.body.cart : [];
+
+    const cleanCart = cart
+      .filter(i => Number(i.quantity || 0) > 0)
+      .map(i => ({
+        foodId: String(i.foodId || ""),
+        name: String(i.name || ""),
+        price: Number(i.price || 0),
+        quantity: Number(i.quantity || 0),
+        total: Number(i.price || 0) * Number(i.quantity || 0),
+      }))
+      .filter(i => i.name);
+
+    const booking = await Booking.findOneAndUpdate(
+      { bookingId },
+      { $set: { draftCart: cleanCart, draftCartUpdatedAt: new Date() } },
+      { new: true }
+    );
+
+    if (!booking) return res.status(404).json({ success: false, error: "Booking not found" });
+
+    return res.json({ success: true, cart: booking.draftCart });
+  } catch (err) {
+    console.error("❌ save cart:", err);
+    res.status(500).json({ success: false, error: "Failed to save cart" });
+  }
+});
+
+
 router.post("/:bookingId/add-food", async (req, res) => {
   try {
     const bookingId = req.params.bookingId;
