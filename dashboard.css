@@ -704,14 +704,6 @@ table td:last-child {
 }
 
 /* Keep Actions column visible */
-#userFoodCart table td:last-child,
-#userFoodCart table th:last-child {
-  position: sticky;
-  right: 0;
-  background: white;
-  z-index: 5;
-  min-width: 230px;
-}
 
 /* Make action buttons line properly */
 #userFoodCartTable td:last-child {
@@ -926,6 +918,7 @@ table td:last-child {
         white-space: normal;
         word-wrap: break-word;
         min-width: 80px;
+        width: 150px;
     }
     
     th {
@@ -1099,15 +1092,6 @@ table td:last-child {
 }
 
 /* Sticky Actions column (keeps table layout normal) */
-#userFoodCart table th:last-child,
-#userFoodCart table td:last-child {
-  position: sticky;
-  right: 0;
-  background: #fff;
-  z-index: 5;
-  min-width: 200px;
-  box-shadow: -8px 0 12px rgba(0,0,0,0.06);
-}
 
 /* Buttons wrapper (instead of making td flex) */
 .cart-actions {
@@ -1137,3 +1121,110 @@ table td:last-child {
     font-size: 11px !important;
   }
 }
+
+/* ===== USER FOOD CART TABLE FIX ===== */
+
+/* 1) Wrap table in horizontal scroll */
+#userFoodCart .table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 2) Keep table as REAL table (remove display:block hacks) */
+#userFoodCart table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;            /* ✅ columns stay aligned */
+  min-width: 900px;               /* ✅ prevents squeezing too much */
+}
+
+/* 3) Header + cells */
+#userFoodCart th,
+#userFoodCart td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #ecf0f1;
+  vertical-align: top;            /* ✅ cart items look better */
+  word-break: break-word;         /* ✅ long names wrap */
+  overflow: hidden;
+}
+
+/* 4) Sticky header works fine now */
+#userFoodCart thead th {
+  position: sticky;
+  top: 0;
+  background: #f8f9fa;
+  z-index: 2;
+}
+
+/* 5) Column widths (set exact widths so alignment never breaks) */
+#userFoodCart th:nth-child(1),
+#userFoodCart td:nth-child(1) { width: 110px; }   /* Booking ID */
+
+#userFoodCart th:nth-child(2),
+#userFoodCart td:nth-child(2) { width: 200px; }   /* Customer */
+
+#userFoodCart th:nth-child(3),
+#userFoodCart td:nth-child(3) { width: 160px; }   /* Rooms */
+
+#userFoodCart th:nth-child(4),
+#userFoodCart td:nth-child(4) { width: 380px; }   /* Cart Items */
+
+#userFoodCart th:nth-child(5),
+#userFoodCart td:nth-child(5) { width: 250px; }   /* Actions */
+
+/* 6) DO NOT make td flex (it breaks column sizing) */
+#userFoodCartTable td:last-child {
+  display: table-cell !important;
+}
+
+/* 7) Actions layout inside cell */
+#userFoodCart .cart-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* 8) Cart item rows inside cart column */
+#userFoodCart .cart-item-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+#userFoodCart .cart-item-left {
+  flex: 1;
+  min-width: 0;
+}
+
+#userFoodCart .cart-item-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+/* 9) Small buttons */
+#userFoodCart .btn-sm {
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  border-radius: 6px !important;
+}
+
+#userFoodCart .table-wrap{
+  width:100%;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+#userFoodCart table{
+  width:100%;
+  border-collapse:collapse;
+  table-layout:fixed;
+  min-width:1000px; /* so columns don't collapse */
+}
+
+
