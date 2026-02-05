@@ -2637,7 +2637,7 @@ function printInvoiceMini(bookingId) {
 
     <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">
       <h3 style="font-size: 13px; margin-bottom: 6px;">🏨 Booking</h3>
-      <p><strong>Room:</strong> ${(booking.roomNumbers || []).join(", ") || "TBD"} (${roomType})</p>
+      <p><strong>Room:</strong> ${(booking.roomNumbers || []).join(", ") || "TBD"}</p>
       <p><strong>Check-in:</strong> ${booking.checkInDate || "-"} ${to12Hour(booking.checkInTime)}</p>
       <p><strong>Check-out:</strong> ${booking.checkOutDate || "Not set"} ${booking.raw?.["Check Out Time"] ? `<span style="color:#e74c3c;font-weight:bold;">${booking.raw["Check Out Time"]}</span>` : ""}</p>
       <p><strong>Nights:</strong> ${nights}</p>
@@ -2659,12 +2659,7 @@ function printInvoiceMini(bookingId) {
         <td style="text-align:right;font-weight:bold;">₹${totalRoomAmount}</td>
       </tr>
 
-      ${additionalAmount > 0 ? `
-        <tr>
-          <td>➕ Additional Charges</td>
-          <td style="text-align:right;font-weight:bold;">₹${additionalAmount}</td>
-        </tr>
-      ` : ""}
+    
 
       ${foodHTML}
     </tbody>
