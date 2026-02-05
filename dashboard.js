@@ -58,6 +58,31 @@ let currentAttendanceView = "calendar";
 /* -------------------- HELPERS -------------------- */
 
 /* ===================== SHARE HELPERS ===================== */
+async function forceDownloadFile(url, filename = "download") {
+  try {
+    if (!url) return alert("❌ File URL missing");
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to download file");
+
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    console.error("forceDownloadFile:", err);
+
+    // fallback: open in new tab
+    window.open(url, "_blank");
+  }
+}
 function to12Hour(time24) {
   if (!time24) return "";
   // supports "HH:mm" or "HH:mm:ss"
