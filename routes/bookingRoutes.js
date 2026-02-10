@@ -185,10 +185,14 @@ router.post("/:bookingId/add-food", async (req, res) => {
 
 /* ------------------ POST CREATE (from previous message) ------------------ */
 router.post("/", async (req, res) => {
+  console.log("✅ NEW ROUTE VERSION RUNNING 123");
+console.log("BODY.RAW:", req.body.raw);
   try {
 
     console.log('booking data',req.body)
-    const raw = req.body || {};
+    const body = req.body || {};
+const extraRaw = body.raw && typeof body.raw === "object" ? body.raw : {};
+const raw = { ...body, ...extraRaw };
 
     // ✅ Normalize values (support both Mongo style + Excel style)
     const bookingId = raw.bookingId || raw["Booking ID"] || "";
@@ -235,23 +239,26 @@ router.post("/", async (req, res) => {
 
     // ✅ Also keep an excel-like raw object so old UI never breaks
     const excelRaw = {
-      ...raw,
-      "Booking ID": bookingId,
-      "Customer Name": customerName,
-      "Mobile": mobile,
-      "Room Number": roomNumbers.length ? roomNumbers.join(", ") : (raw.roomNumbers || "TBD"),
-      "Check In": checkInDate,
-      "Check In Time": checkInTime,
-      "Check Out": checkOutDate,
-      "Nights": nights,
-      "Room Price Per Night": roomPricePerNight,
-      "Room Amount": roomAmount,
-      "Additional Amount": additionalAmount,
-      "Total Amount": totalAmount,
-      "Advance": advance,
-      "Balance": balance,
-      "Status": status,
-    };
+  ...body,        // keep all existing fields
+  ...extraRaw,    // add address & numPersons safely
+  "Booking ID": bookingId,
+  "Customer Name": customerName,
+  "Mobile": mobile,
+  "Room Number": roomNumbers.length ? roomNumbers.join(", ") : "TBD",
+  "Check In": checkInDate,
+  "Check In Time": checkInTime,
+  "Check Out": checkOutDate,
+  "Nights": nights,
+  "Room Price Per Night": roomPricePerNight,
+  "Room Amount": roomAmount,
+  "Additional Amount": additionalAmount,
+  "Total Amount": totalAmount,
+  "Advance": advance,
+  "Balance": balance,
+  "Status": status,
+};
+delete excelRaw.raw;
+
 
     // ✅ Save booking
     const created = await Booking.create({
@@ -287,7 +294,6 @@ router.post("/", async (req, res) => {
     return res.status(500).json({ success: false, error: "Failed to create booking" });
   }
 });
-
 
 router.get("/search", async (req, res) => {
   try {
