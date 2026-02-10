@@ -1271,6 +1271,7 @@ async function handleBookingSubmit(e) {
   const customerName = $("cust1")?.value || "";
   const mobile = $("mobile1")?.value || "";
   const address = $("address")?.value || "";
+  const numPersons = parseInt($("numPersons")?.value || 1);
 
   const totalAmount = roomAmount + additionalAmount;
   const balance = totalAmount - advancePayment;
@@ -1320,7 +1321,7 @@ async function handleBookingSubmit(e) {
       advance: advancePayment,
       balance,
       status: "Confirmed",
-      raw: {},
+      raw: { address, numPersons },
     };
 
     const res = await fetch(`${API_URL}/bookings`, {
@@ -2596,8 +2597,8 @@ function printInvoiceMini(bookingId) {
   const additionalAmount = Number(booking.additionalAmount || 0);
 
   const roomType = '';
-  const address = '';
-  const numPersons = '';
+  const address = booking.raw?.address || booking.raw?.["Address"] || "-";
+const numPersons = booking.raw?.numPersons || booking.raw?.["Number of Persons"] || "-";
   const note = '';
 
   const w = window.open("", "_blank", "width=900,height=700");
