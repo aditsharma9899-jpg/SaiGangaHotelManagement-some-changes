@@ -1272,7 +1272,7 @@ async function handleBookingSubmit(e) {
   const mobile = $("mobile1")?.value || "";
   const address = $("address")?.value || "";
   const numPersons = parseInt($("numPersons")?.value || 1);
-
+  const srNumber = $("srNumber")?.value || "";
   const totalAmount = roomAmount + additionalAmount;
   const balance = totalAmount - advancePayment;
 
@@ -1321,7 +1321,7 @@ async function handleBookingSubmit(e) {
       advance: advancePayment,
       balance,
       status: "Confirmed",
-      raw: { address, numPersons },
+      raw: { address, numPersons,srNumber },
     };
 
     const res = await fetch(`${API_URL}/bookings`, {
@@ -2599,6 +2599,7 @@ function printInvoiceMini(bookingId) {
   const roomType = '';
   const address = booking.raw?.address || booking.raw?.["Address"] || "-";
 const numPersons = booking.raw?.numPersons || booking.raw?.["Number of Persons"] || "-";
+  const srNumber = booking.raw?.srNumber || booking.raw?.["Sr. Number"] || "-";
   const note = '';
 
   const w = window.open("", "_blank", "width=900,height=700");
@@ -2631,6 +2632,7 @@ const numPersons = booking.raw?.numPersons || booking.raw?.["Number of Persons"]
     <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">
       <h3 style="font-size: 13px; margin-bottom: 6px;">👤 Customer</h3>
       <p><strong>Name:</strong> ${booking.customerName || "-"}</p>
+      </p>]<p><strong>Sr. Number:</strong> ${srNumber}</p>
       <p><strong>Mobile:</strong> ${booking.mobile || "-"}</p>
       <p><strong>Address:</strong> ${address}</p>
       <p><strong>Persons:</strong> ${numPersons}</p>
