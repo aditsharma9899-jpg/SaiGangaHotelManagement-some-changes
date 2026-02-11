@@ -2632,7 +2632,7 @@ const numPersons = booking.raw?.numPersons || booking.raw?.["Number of Persons"]
     <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">
       <h3 style="font-size: 13px; margin-bottom: 6px;">👤 Customer</h3>
       <p><strong>Name:</strong> ${booking.customerName || "-"}</p>
-      </p>]<p><strong>Sr. Number:</strong> ${srNumber}</p>
+      <p><strong>Sr. Number:</strong> ${srNumber}</p>
       <p><strong>Mobile:</strong> ${booking.mobile || "-"}</p>
       <p><strong>Address:</strong> ${address}</p>
       <p><strong>Persons:</strong> ${numPersons}</p>
