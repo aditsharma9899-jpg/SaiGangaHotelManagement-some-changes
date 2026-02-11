@@ -1339,7 +1339,7 @@ async function handleBookingSubmit(e) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          paymentId: "PAY" + String(payments.length + 1).padStart(4, "0"),
+          paymentId: "PAY" + Date.now(),
           bookingId,
           customerName,
           amount: advancePayment,
@@ -1455,7 +1455,7 @@ async function handleAdvanceBookingSubmit(e) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          paymentId: "PAY" + String(payments.length + 1).padStart(4, "0"),
+          paymentId: "PAY" + Date.now(),
           bookingId,
           customerName,
           amount: advanceAmount,
@@ -2028,7 +2028,7 @@ async function handlePaymentSubmit(e) {
 
   try {
     const payload = {
-      paymentId: "PAY" + String(payments.length + 1).padStart(4, "0"),
+      paymentId: "PAY" + Date.now(),
       bookingId,
       customerName: booking.customerName,
       amount,
